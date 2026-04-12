@@ -3,13 +3,17 @@ import type { FormConfig, FormField } from '../config/formTypes';
 import { clinicConfig } from '../config/clinic';
 import { isFieldVisible } from './validation';
 
-function sanitize(text: string): string {
-  return text || '—';
-}
+// Colors
+const TEAL = [13, 148, 136] as const;
+const DARK = [30, 30, 30] as const;
+const GRAY = [100, 100, 100] as const;
+const LIGHT_GRAY = [160, 160, 160] as const;
+const SECTION_BG = [240, 253, 250] as const; // teal-50
+const DIVIDER = [220, 220, 220] as const;
 
 function formatFieldValue(field: FormField, value: unknown): string {
   if (value === undefined || value === null || value === '') return '—';
-  if (field.type === 'checkbox') return value ? 'Yes' : 'No';
+  if (field.type === 'checkbox') return value ? 'Ano / Yes' : 'Ne / No';
   if (field.type === 'checkboxGroup' && Array.isArray(value)) {
     return value
       .map((v) => {
@@ -30,110 +34,177 @@ export function generatePDF(
   formData: Record<string, unknown>,
 ): Blob {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  const contentWidth = pageWidth - margin * 2;
-  let y = 20;
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 18;
+  const contentW = pageW - margin * 2;
+  let y = 16;
 
   const checkPageBreak = (needed: number) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - 20) {
+    if (y + needed > pageH - 20) {
       doc.addPage();
-      y = 20;
+      y = 16;
     }
   };
 
-  // Header — clinic info
-  doc.setFontSize(10);
-  doc.setTextColor(100);
+  // ── HEADER BAR ──
+  // Teal top stripe
+  doc.setFillColor(...TEAL);
+  doc.rect(0, 0, pageW, 3, 'F');
+
+  y = 12;
+
+  // Clinic info line
   const clinicLine = [clinicConfig.name, clinicConfig.address, clinicConfig.phone, clinicConfig.email]
     .filter(Boolean)
-    .join('  |  ');
+    .join('   |   ');
   if (clinicLine) {
-    doc.text(clinicLine, pageWidth / 2, y, { align: 'center' });
-    y += 8;
+    doc.setFontSize(8);
+    doc.setTextColor(...LIGHT_GRAY);
+    doc.text(clinicLine, pageW / 2, y, { align: 'center' });
+    y += 6;
   }
 
   // Form title
-  doc.setFontSize(18);
-  doc.setTextColor(13, 148, 136); // teal-600
-  doc.text(sanitize(formConfig.title), pageWidth / 2, y, { align: 'center' });
-  y += 8;
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...TEAL);
+  doc.text(formConfig.title || formConfig.id, pageW / 2, y + 6, { align: 'center' });
+  y += 14;
 
-  // Date + version
+  // Date & version subtitle
   doc.setFontSize(9);
-  doc.setTextColor(120);
-  const dateStr = new Date().toLocaleDateString(formConfig.language === 'cs' ? 'cs-CZ' : 'en-US');
-  doc.text(`${dateStr}  |  v${formConfig.version}`, pageWidth / 2, y, { align: 'center' });
-  y += 10;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  const dateStr = new Date().toLocaleDateString(formConfig.language === 'cs' ? 'cs-CZ' : 'en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  doc.text(`${dateStr}   |   v${formConfig.version}`, pageW / 2, y, { align: 'center' });
+  y += 6;
 
-  // Divider
-  doc.setDrawColor(200);
-  doc.line(margin, y, pageWidth - margin, y);
+  // Thin divider
+  doc.setDrawColor(...DIVIDER);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
   y += 8;
 
-  // Sections
+  // ── SECTIONS ──
   for (const section of formConfig.sections) {
-    checkPageBreak(20);
+    // Gather visible, renderable fields
+    const visibleFields = section.fields.filter(
+      (f) => f.type !== 'divider' && f.type !== 'staticText' && f.type !== 'signature' && isFieldVisible(f, formData),
+    );
+    const signatureField = section.fields.find((f) => f.type === 'signature');
 
-    // Section title
-    if (section.title) {
-      doc.setFontSize(13);
-      doc.setTextColor(30);
-      doc.text(section.title, margin, y);
-      y += 7;
+    // Skip empty sections (except if it has a signature)
+    if (visibleFields.length === 0 && !signatureField) continue;
+
+    // Estimate section height for page break
+    const estimatedHeight = 14 + visibleFields.length * 9 + (signatureField ? 40 : 0);
+    checkPageBreak(Math.min(estimatedHeight, 60));
+
+    // Section header — colored bar
+    doc.setFillColor(...SECTION_BG);
+    doc.roundedRect(margin, y, contentW, 9, 2, 2, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...TEAL);
+    doc.text(section.title || '—', margin + 4, y + 6.5);
+    y += 14;
+
+    // Fields as a clean table-like layout
+    if (visibleFields.length > 0) {
+      const colLabelW = contentW * 0.42;
+      const colValueW = contentW * 0.58;
+      let rowIndex = 0;
+
+      for (const field of visibleFields) {
+        checkPageBreak(10);
+
+        // Alternating row background
+        if (rowIndex % 2 === 0) {
+          doc.setFillColor(248, 248, 248);
+          doc.rect(margin, y - 3.5, contentW, 8, 'F');
+        }
+
+        // Label
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...GRAY);
+        const label = field.label || field.id;
+        doc.text(label, margin + 3, y);
+
+        // Value
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...DARK);
+        const valueStr = formatFieldValue(field, formData[field.id]);
+        const valueLines = doc.splitTextToSize(valueStr, colValueW - 6);
+        doc.text(valueLines, margin + colLabelW + 3, y);
+
+        y += Math.max(valueLines.length * 4.5, 5) + 3;
+        rowIndex++;
+      }
     }
 
-    for (const field of section.fields) {
-      if (!isFieldVisible(field, formData)) continue;
-      if (field.type === 'divider') {
-        checkPageBreak(6);
-        doc.setDrawColor(220);
-        doc.line(margin, y, pageWidth - margin, y);
-        y += 6;
-        continue;
-      }
-      if (field.type === 'staticText') {
-        if (field.content) {
-          checkPageBreak(10);
-          doc.setFontSize(9);
-          doc.setTextColor(80);
-          const lines = doc.splitTextToSize(field.content, contentWidth);
-          doc.text(lines, margin, y);
-          y += lines.length * 4 + 4;
-        }
-        continue;
-      }
-      if (field.type === 'signature') {
-        const sigData = formData[field.id];
-        if (sigData && typeof sigData === 'string') {
-          checkPageBreak(40);
-          doc.setFontSize(10);
-          doc.setTextColor(60);
-          doc.text(field.label || 'Signature:', margin, y);
-          y += 4;
-          try {
-            doc.addImage(sigData, 'PNG', margin, y, 60, 25);
-          } catch {
-            // ignore image errors
-          }
-          y += 30;
-        }
-        continue;
-      }
-
+    // Static text blocks (consent texts etc.)
+    const staticFields = section.fields.filter(
+      (f) => f.type === 'staticText' && f.content && isFieldVisible(f, formData),
+    );
+    for (const sf of staticFields) {
       checkPageBreak(12);
-      doc.setFontSize(10);
-      doc.setTextColor(60);
-      const label = field.label || field.id;
-      doc.text(label + ':', margin, y);
-      doc.setTextColor(20);
-      const valueStr = formatFieldValue(field, formData[field.id]);
-      const valueLines = doc.splitTextToSize(valueStr, contentWidth - 2);
-      doc.text(valueLines, margin + 2, y + 5);
-      y += 5 + valueLines.length * 5 + 3;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(...GRAY);
+      const lines = doc.splitTextToSize(sf.content!, contentW - 8);
+      doc.text(lines, margin + 4, y);
+      y += lines.length * 3.5 + 4;
+    }
+
+    // Signature at end of section
+    if (signatureField) {
+      const sigData = formData[signatureField.id];
+      if (sigData && typeof sigData === 'string') {
+        checkPageBreak(42);
+        // Signature label
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...GRAY);
+        doc.text(signatureField.label || 'Signature:', margin + 3, y);
+        y += 3;
+        // Signature box
+        doc.setDrawColor(...DIVIDER);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(margin + 2, y, 70, 28, 2, 2, 'S');
+        try {
+          doc.addImage(sigData, 'PNG', margin + 3, y + 1, 68, 26);
+        } catch {
+          // ignore image errors
+        }
+        y += 32;
+        // Date under signature
+        doc.setFontSize(8);
+        doc.setTextColor(...LIGHT_GRAY);
+        doc.text(`Datum / Date: ${dateStr}`, margin + 3, y);
+        y += 6;
+      }
     }
 
     y += 4;
+  }
+
+  // ── FOOTER ──
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    // Bottom stripe
+    doc.setFillColor(...TEAL);
+    doc.rect(0, pageH - 2, pageW, 2, 'F');
+    // Page number
+    doc.setFontSize(7);
+    doc.setTextColor(...LIGHT_GRAY);
+    doc.text(`${i} / ${totalPages}`, pageW / 2, pageH - 4, { align: 'center' });
   }
 
   return doc.output('blob');
