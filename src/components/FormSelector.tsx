@@ -26,7 +26,7 @@ export function FormSelector({ onSelect }: FormSelectorProps) {
         <img
           src={clinicConfig.logoPath}
           alt="Logo"
-          className="w-20 h-20 object-contain mb-3"
+          className="w-48 h-48 object-contain mb-3"
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
