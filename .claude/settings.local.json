@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/gh/google/fonts@main/apache/roboto/static/Roboto-Regular.ttf\" -o public/fonts/Roboto-Regular.ttf)",
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/gh/google/fonts@main/apache/roboto/static/Roboto-Bold.ttf\" -o public/fonts/Roboto-Bold.ttf)"
+    ]
+  }
+}

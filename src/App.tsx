@@ -41,7 +41,7 @@ export default function App() {
   const handleSubmit = useCallback(async () => {
     if (!form.formConfig) return;
 
-    const pdf = generatePDF(form.formConfig, form.formData);
+    const pdf = await generatePDF(form.formConfig, form.formData);
     const name = buildFileName(form.formConfig, form.formData);
     setPdfBlob(pdf);
     setFileName(name);
