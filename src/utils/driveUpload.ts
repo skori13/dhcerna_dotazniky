@@ -6,20 +6,25 @@ export async function findOrCreateFolder(
   parentFolderId: string,
   accessToken: string,
 ): Promise<string> {
-  // Search for existing folder
-  const query = `name='${folderName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  // Search for existing folder by name within parent
+  const escapedName = folderName.replace(/'/g, "\\'");
+  const query = `name='${escapedName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const searchRes = await fetch(
-    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
+  if (!searchRes.ok) {
+    const errText = await searchRes.text();
+    throw new Error(`Folder search failed: ${searchRes.status} ${errText}`);
+  }
   const searchData = await searchRes.json();
 
   if (searchData.files && searchData.files.length > 0) {
     return searchData.files[0].id;
   }
 
-  // Create new folder
-  const createRes = await fetch(`${DRIVE_API}/files`, {
+  // Create new folder inside parent
+  const createRes = await fetch(`${DRIVE_API}/files?supportsAllDrives=true`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -31,7 +36,14 @@ export async function findOrCreateFolder(
       parents: [parentFolderId],
     }),
   });
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    throw new Error(`Folder create failed: ${createRes.status} ${errText}`);
+  }
   const createData = await createRes.json();
+  if (!createData.id) {
+    throw new Error('Folder creation did not return an ID');
+  }
   return createData.id;
 }
 
@@ -54,15 +66,23 @@ export async function uploadPdfToDrive(
   );
   form.append('file', pdfBlob);
 
-  const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  });
+  const res = await fetch(
+    `${UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink,parents&supportsAllDrives=true`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form,
+    },
+  );
 
   if (!res.ok) {
-    throw new Error(`Drive upload failed: ${res.status} ${res.statusText}`);
+    const errText = await res.text();
+    throw new Error(`Drive upload failed: ${res.status} ${errText}`);
   }
 
-  return res.json();
+  const data = await res.json();
+  if (!data.id) {
+    throw new Error('Upload did not return file ID');
+  }
+  return data;
 }

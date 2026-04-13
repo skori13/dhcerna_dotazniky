@@ -3,7 +3,7 @@ import { findOrCreateFolder, uploadPdfToDrive } from '../utils/driveUpload';
 import { clinicConfig } from '../config/clinic';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'https://www.googleapis.com/auth/drive';
 const TOKEN_KEY = 'dental_drive_token';
 const TOKEN_EXPIRY_KEY = 'dental_drive_token_expiry';
 
