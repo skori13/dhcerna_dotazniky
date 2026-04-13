@@ -18,8 +18,18 @@ export function useFormState() {
   const [isComplete, setIsComplete] = useState(false);
 
   const selectForm = useCallback((config: FormConfig) => {
+    // Pre-populate fields with defaultValue (e.g. 'today' for date fields)
+    const initialData: Record<string, unknown> = {};
+    const today = new Date().toISOString().slice(0, 10);
+    for (const section of config.sections) {
+      for (const field of section.fields) {
+        if (field.defaultValue !== undefined) {
+          initialData[field.id] = field.defaultValue === 'today' ? today : field.defaultValue;
+        }
+      }
+    }
     setFormConfig(config);
-    setFormData({});
+    setFormData(initialData);
     setCurrentSection(0);
     setErrors({});
     setIsComplete(false);

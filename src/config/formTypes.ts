@@ -27,6 +27,7 @@ export interface FormField {
   content?: string;
   maxLength?: number;
   inputMode?: string;
+  defaultValue?: string | 'today';
 }
 
 export interface FormSection {

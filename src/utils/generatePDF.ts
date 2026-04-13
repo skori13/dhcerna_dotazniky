@@ -5,6 +5,32 @@ import { isFieldVisible } from './validation';
 
 // Cache fonts as base64 once loaded
 let fontCache: { regular: string; bold: string } | null = null;
+let logoCache: { dataUrl: string; width: number; height: number } | null = null;
+
+async function loadLogo(): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  if (logoCache) return logoCache;
+  try {
+    const res = await fetch(clinicConfig.logoPath);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+    logoCache = { dataUrl, width: dims.width, height: dims.height };
+    return logoCache;
+  } catch {
+    return null;
+  }
+}
 
 async function loadFonts(): Promise<{ regular: string; bold: string }> {
   if (fontCache) return fontCache;
@@ -62,8 +88,8 @@ export async function generatePDF(
 ): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // Register Roboto font (Unicode/Czech support)
-  const fonts = await loadFonts();
+  // Register Roboto font (Unicode/Czech support) + load logo
+  const [fonts, logo] = await Promise.all([loadFonts(), loadLogo()]);
   doc.addFileToVFS('Roboto-Regular.ttf', fonts.regular);
   doc.addFileToVFS('Roboto-Bold.ttf', fonts.bold);
   doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
@@ -241,6 +267,19 @@ export async function generatePDF(
     doc.setFontSize(7);
     doc.setTextColor(...LIGHT_GRAY);
     doc.text(`${i} / ${totalPages}`, pageW / 2, pageH - 4, { align: 'center' });
+
+    // Logo in bottom-right (preserving aspect ratio, width ~40mm)
+    if (logo) {
+      const logoW = 40;
+      const logoH = (logo.height / logo.width) * logoW;
+      const logoX = pageW - margin - logoW;
+      const logoY = pageH - 8 - logoH;
+      try {
+        doc.addImage(logo.dataUrl, 'JPEG', logoX, logoY, logoW, logoH);
+      } catch {
+        // ignore image errors
+      }
+    }
   }
 
   return doc.output('blob');

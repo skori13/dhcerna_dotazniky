@@ -1,5 +1,5 @@
 export const clinicConfig = {
-  name: '',              // TODO: název ordinace
+  name: 'Dentální Hygiena Nikola Černá',
   address: '',           // TODO: adresa
   phone: '',             // TODO: telefon
   email: '',             // TODO: email
