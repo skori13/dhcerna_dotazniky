@@ -69,10 +69,12 @@ export function useFormState() {
     }
   }, [currentSection]);
 
-  const goToReview = useCallback(() => {
+  const goToReview = useCallback((): boolean => {
     if (validateCurrentSection()) {
       setIsComplete(true);
+      return true;
     }
+    return false;
   }, [validateCurrentSection]);
 
   const backFromReview = useCallback(() => {

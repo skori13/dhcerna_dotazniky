@@ -4,12 +4,14 @@ import { FormWizard } from './components/FormWizard';
 import { ReviewScreen } from './components/ReviewScreen';
 import { SuccessScreen } from './components/SuccessScreen';
 import { GoogleDriveStatus } from './components/GoogleDriveStatus';
+import { HistoryScreen } from './components/HistoryScreen';
 import { useFormState } from './hooks/useFormState';
 import { useGoogleDrive } from './hooks/useGoogleDrive';
 import { generatePDF, buildFileName, buildFolderName } from './utils/generatePDF';
+import { saveSubmission } from './utils/submissionStore';
 import type { Lang } from './i18n/ui-strings';
 
-type Screen = 'select' | 'wizard' | 'review' | 'success';
+type Screen = 'select' | 'wizard' | 'review' | 'success' | 'history';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('select');
@@ -34,8 +36,9 @@ export default function App() {
   }, [form]);
 
   const handleReview = useCallback(() => {
-    form.goToReview();
-    setScreen('review');
+    if (form.goToReview()) {
+      setScreen('review');
+    }
   }, [form]);
 
   const handleSubmit = useCallback(async () => {
@@ -46,6 +49,19 @@ export default function App() {
     setPdfBlob(pdf);
     setFileName(name);
     setScreen('success');
+
+    // Always save to local IndexedDB backup
+    const patientName = `${(form.formData.lastName as string) || ''} ${(form.formData.firstName as string) || ''}`.trim();
+    saveSubmission({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      patientName: patientName || 'Unknown',
+      formType: form.formConfig.title || form.formConfig.id,
+      formLanguage: form.formConfig.language,
+      submittedAt: new Date().toISOString(),
+      pdfBlob: pdf,
+    }).catch(() => {
+      // IndexedDB save failed — not critical
+    });
 
     if (drive.isConnected) {
       const folderName = buildFolderName(form.formData);
@@ -76,7 +92,16 @@ export default function App() {
         />
       </div>
 
-      {screen === 'select' && <FormSelector onSelect={handleSelectForm} />}
+      {screen === 'select' && (
+        <FormSelector
+          onSelect={handleSelectForm}
+          onOpenHistory={() => setScreen('history')}
+        />
+      )}
+
+      {screen === 'history' && (
+        <HistoryScreen onClose={() => setScreen('select')} />
+      )}
 
       {screen === 'wizard' && form.formConfig && (
         <FormWizard

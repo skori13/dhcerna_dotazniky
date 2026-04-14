@@ -153,19 +153,16 @@ export async function generatePDF(
   y += 8;
 
   // ── SECTIONS ──
+  // Line height helpers (mm per line at given font size)
+  const lineH = (fontSize: number) => fontSize * 0.4;
+
   for (const section of formConfig.sections) {
-    // Gather visible, renderable fields
-    const visibleFields = section.fields.filter(
-      (f) => f.type !== 'divider' && f.type !== 'staticText' && f.type !== 'signature' && isFieldVisible(f, formData),
-    );
-    const signatureField = section.fields.find((f) => f.type === 'signature');
+    const visibleFields = section.fields.filter((f) => isFieldVisible(f, formData));
 
-    // Skip empty sections (except if it has a signature)
-    if (visibleFields.length === 0 && !signatureField) continue;
+    // Skip completely empty sections
+    if (visibleFields.length === 0) continue;
 
-    // Estimate section height for page break
-    const estimatedHeight = 14 + visibleFields.length * 9 + (signatureField ? 40 : 0);
-    checkPageBreak(Math.min(estimatedHeight, 60));
+    checkPageBreak(20);
 
     // Section header — colored bar
     doc.setFillColor(...SECTION_BG);
@@ -176,84 +173,132 @@ export async function generatePDF(
     doc.text(section.title || '—', margin + 4, y + 6.5);
     y += 14;
 
-    // Fields as a clean table-like layout
-    if (visibleFields.length > 0) {
-      const colLabelW = contentW * 0.42;
-      const colValueW = contentW * 0.58;
-      let rowIndex = 0;
-
-      for (const field of visibleFields) {
-        checkPageBreak(10);
-
-        // Alternating row background
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(248, 248, 248);
-          doc.rect(margin, y - 3.5, contentW, 8, 'F');
-        }
-
-        // Label
-        doc.setFontSize(9);
-        doc.setFont('Roboto', 'normal');
-        doc.setTextColor(...GRAY);
-        const label = field.label || field.id;
-        doc.text(label, margin + 3, y);
-
-        // Value
-        doc.setFont('Roboto', 'bold');
-        doc.setTextColor(...DARK);
-        const valueStr = formatFieldValue(field, formData[field.id]);
-        const valueLines = doc.splitTextToSize(valueStr, colValueW - 6);
-        doc.text(valueLines, margin + colLabelW + 3, y);
-
-        y += Math.max(valueLines.length * 4.5, 5) + 3;
-        rowIndex++;
-      }
-    }
-
-    // Static text blocks (consent texts etc.)
-    const staticFields = section.fields.filter(
-      (f) => f.type === 'staticText' && f.content && isFieldVisible(f, formData),
-    );
-    for (const sf of staticFields) {
-      checkPageBreak(12);
-      doc.setFontSize(8);
-      doc.setFont('Roboto', 'normal');
-      doc.setTextColor(...GRAY);
-      const lines = doc.splitTextToSize(sf.content!, contentW - 8);
-      doc.text(lines, margin + 4, y);
-      y += lines.length * 3.5 + 4;
-    }
-
-    // Signature at end of section
-    if (signatureField) {
-      const sigData = formData[signatureField.id];
-      if (sigData && typeof sigData === 'string') {
-        checkPageBreak(42);
-        // Signature label
-        doc.setFontSize(9);
-        doc.setFont('Roboto', 'normal');
-        doc.setTextColor(...GRAY);
-        doc.text(signatureField.label || 'Signature:', margin + 3, y);
-        y += 3;
-        // Signature box
+    // Render ALL fields in order (preserving config order)
+    let rowIndex = 0;
+    for (const field of visibleFields) {
+      // ── Divider ──
+      if (field.type === 'divider') {
+        checkPageBreak(6);
         doc.setDrawColor(...DIVIDER);
         doc.setLineWidth(0.2);
-        doc.roundedRect(margin + 2, y, 70, 28, 2, 2, 'S');
-        try {
-          doc.addImage(sigData, 'PNG', margin + 3, y + 1, 68, 26);
-        } catch {
-          // ignore image errors
-        }
-        y += 32;
-        // Date under signature
-        doc.setFontSize(8);
-        doc.setTextColor(...LIGHT_GRAY);
-        doc.text(`Datum / Date: ${dateStr}`, margin + 3, y);
+        doc.line(margin, y, pageW - margin, y);
         y += 6;
+        continue;
       }
+
+      // ── Static text ──
+      if (field.type === 'staticText') {
+        if (!field.content) continue;
+        doc.setFontSize(9);
+        doc.setFont('Roboto', 'normal');
+        doc.setTextColor(...GRAY);
+        const lines: string[] = doc.splitTextToSize(field.content, contentW - 8);
+        const blockH = lines.length * lineH(9) + 6;
+        checkPageBreak(blockH);
+        doc.text(lines, margin + 4, y);
+        y += blockH;
+        continue;
+      }
+
+      // ── Signature ──
+      if (field.type === 'signature') {
+        const sigData = formData[field.id];
+        if (sigData && typeof sigData === 'string') {
+          checkPageBreak(44);
+          doc.setFontSize(9);
+          doc.setFont('Roboto', 'normal');
+          doc.setTextColor(...GRAY);
+          doc.text(field.label || 'Signature:', margin + 3, y);
+          y += 4;
+          doc.setDrawColor(...DIVIDER);
+          doc.setLineWidth(0.2);
+          doc.roundedRect(margin + 2, y, 70, 28, 2, 2, 'S');
+          try {
+            doc.addImage(sigData, 'PNG', margin + 3, y + 1, 68, 26);
+          } catch {
+            // ignore image errors
+          }
+          y += 32;
+          doc.setFontSize(8);
+          doc.setTextColor(...LIGHT_GRAY);
+          doc.text(`Datum / Date: ${dateStr}`, margin + 3, y);
+          y += 8;
+        }
+        continue;
+      }
+
+      // ── Checkbox (single) ──
+      if (field.type === 'checkbox') {
+        doc.setFontSize(9);
+        doc.setFont('Roboto', 'normal');
+        // Wrap the label to compute real height
+        const labelLines: string[] = doc.splitTextToSize(field.label || field.id, contentW - 20);
+        const rowH = Math.max(labelLines.length * lineH(9), 5) + 4;
+        checkPageBreak(rowH);
+
+        // Alternating row bg
+        if (rowIndex % 2 === 0) {
+          doc.setFillColor(248, 248, 248);
+          doc.rect(margin, y - 3.5, contentW, rowH, 'F');
+        }
+
+        // Checkbox indicator
+        const checked = !!formData[field.id];
+        doc.setFont('Roboto', 'bold');
+        const cbColor = checked ? TEAL : GRAY;
+        doc.setTextColor(cbColor[0], cbColor[1], cbColor[2]);
+        doc.text(checked ? '[x]' : '[ ]', margin + 3, y);
+
+        // Label text (wrapped)
+        doc.setFont('Roboto', 'normal');
+        doc.setTextColor(...DARK);
+        doc.text(labelLines, margin + 14, y);
+
+        y += rowH;
+        rowIndex++;
+        continue;
+      }
+
+      // ── All other data fields (text, date, email, tel, number, textarea, radio, select, checkboxGroup) ──
+      const colLabelW = contentW * 0.42;
+      const colValueW = contentW * 0.58;
+
+      doc.setFontSize(9);
+
+      // Compute wrapped sizes for both label and value
+      doc.setFont('Roboto', 'normal');
+      const labelText = field.label || field.id;
+      const labelLines: string[] = doc.splitTextToSize(labelText, colLabelW - 6);
+
+      doc.setFont('Roboto', 'bold');
+      const valueStr = formatFieldValue(field, formData[field.id]);
+      const valueLines: string[] = doc.splitTextToSize(valueStr, colValueW - 6);
+
+      const maxLines = Math.max(labelLines.length, valueLines.length);
+      const rowH = maxLines * lineH(9) + 4;
+      checkPageBreak(rowH);
+
+      // Alternating row bg
+      if (rowIndex % 2 === 0) {
+        doc.setFillColor(248, 248, 248);
+        doc.rect(margin, y - 3.5, contentW, rowH, 'F');
+      }
+
+      // Label
+      doc.setFont('Roboto', 'normal');
+      doc.setTextColor(...GRAY);
+      doc.text(labelLines, margin + 3, y);
+
+      // Value
+      doc.setFont('Roboto', 'bold');
+      doc.setTextColor(...DARK);
+      doc.text(valueLines, margin + colLabelW + 3, y);
+
+      y += rowH;
+      rowIndex++;
     }
 
-    y += 4;
+    y += 6;
   }
 
   // ── FOOTER ──
