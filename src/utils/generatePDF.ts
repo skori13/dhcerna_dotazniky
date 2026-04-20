@@ -86,7 +86,7 @@ export async function generatePDF(
   formConfig: FormConfig,
   formData: Record<string, unknown>,
 ): Promise<Blob> {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
 
   // Register Roboto font (Unicode/Czech support) + load logo
   const [fonts, logo] = await Promise.all([loadFonts(), loadLogo()]);
@@ -214,7 +214,7 @@ export async function generatePDF(
           doc.setLineWidth(0.2);
           doc.roundedRect(margin + 2, y, 70, 28, 2, 2, 'S');
           try {
-            doc.addImage(sigData, 'PNG', margin + 3, y + 1, 68, 26);
+            doc.addImage(sigData, 'PNG', margin + 3, y + 1, 68, 26, undefined, 'FAST');
           } catch {
             // ignore image errors
           }
@@ -320,7 +320,7 @@ export async function generatePDF(
       const logoX = pageW - margin - logoW;
       const logoY = pageH - 8 - logoH;
       try {
-        doc.addImage(logo.dataUrl, 'JPEG', logoX, logoY, logoW, logoH);
+        doc.addImage(logo.dataUrl, 'JPEG', logoX, logoY, logoW, logoH, 'clinic-logo', 'FAST');
       } catch {
         // ignore image errors
       }
