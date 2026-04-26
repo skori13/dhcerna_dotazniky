@@ -31,6 +31,12 @@ const strings = {
     openInDrive: 'Otevřít v Drive',
     formCompleted: 'Formulář úspěšně odeslán',
     pleaseSign: 'Prosím podepište se',
+    invalidBirthNumber: 'Nerozpoznané RČ, nutno ručně doplnit datum',
+    drivePromptTitle: 'Google Drive není připojen',
+    drivePromptBody: 'PDF se bez Drive uloží jen lokálně do tohoto prohlížeče. Doporučujeme nejprve připojit Drive.',
+    drivePromptConnect: 'Připojit Drive',
+    drivePromptContinue: 'Pokračovat bez Drive',
+    drivePromptCancel: 'Zrušit',
   },
   en: {
     selectForm: 'Select a form',
@@ -62,6 +68,12 @@ const strings = {
     openInDrive: 'Open in Drive',
     formCompleted: 'Form submitted successfully',
     pleaseSign: 'Please sign below',
+    invalidBirthNumber: 'Birth number not recognized, please fill date manually',
+    drivePromptTitle: 'Google Drive is not connected',
+    drivePromptBody: 'Without Drive, the PDF will only be saved locally in this browser. We recommend connecting Drive first.',
+    drivePromptConnect: 'Connect Drive',
+    drivePromptContinue: 'Continue without Drive',
+    drivePromptCancel: 'Cancel',
   },
 } as const;
 

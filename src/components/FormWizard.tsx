@@ -10,6 +10,7 @@ interface FormWizardProps {
   currentSection: number;
   errors: Record<string, string>;
   onUpdateField: (fieldId: string, value: unknown) => void;
+  onBlurField?: (fieldId: string, value: unknown) => void;
   onNext: () => void;
   onPrev: () => void;
   onReview: () => void;
@@ -22,6 +23,7 @@ export function FormWizard({
   currentSection,
   errors,
   onUpdateField,
+  onBlurField,
   onNext,
   onPrev,
   onReview,
@@ -71,6 +73,7 @@ export function FormWizard({
                 value={formData[field.id]}
                 error={errors[field.id] || null}
                 onChange={(val) => onUpdateField(field.id, val)}
+                onBlurField={onBlurField}
                 lang={formConfig.language}
               />
             ))}

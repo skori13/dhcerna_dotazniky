@@ -8,13 +8,19 @@ interface FormFieldProps {
   value: unknown;
   error: string | null;
   onChange: (value: unknown) => void;
+  onBlurField?: (fieldId: string, value: unknown) => void;
   lang: Lang;
 }
 
-export function FormFieldComponent({ field, value, error, onChange, lang }: FormFieldProps) {
+export function FormFieldComponent({ field, value, error, onChange, onBlurField, lang }: FormFieldProps) {
   const t = getStrings(lang);
 
-  const errorMsg = error === 'required' ? t.requiredField : error;
+  const errorMsg =
+    error === 'required'
+      ? t.requiredField
+      : error === 'invalidBirthNumber'
+        ? t.invalidBirthNumber
+        : error;
   const baseInputClass = `w-full px-4 py-3 text-lg rounded-xl border-2 transition-colors outline-none
     ${error ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-teal-400 bg-white'}`;
 
@@ -67,6 +73,7 @@ export function FormFieldComponent({ field, value, error, onChange, lang }: Form
           placeholder={field.placeholder}
           value={(value as string) ?? ''}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => onBlurField?.(field.id, e.target.value)}
           maxLength={field.maxLength}
           className={baseInputClass}
         />

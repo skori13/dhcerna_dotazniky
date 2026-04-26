@@ -87,6 +87,23 @@ export function useGoogleDrive() {
     }, 500);
   }, []);
 
+  const verifyConnection = useCallback(async (): Promise<boolean> => {
+    const token = getAccessToken();
+    if (!token) return false;
+    try {
+      const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) return true;
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_EXPIRY_KEY);
+      setState((s) => ({ ...s, isConnected: false }));
+      return false;
+    } catch {
+      return false;
+    }
+  }, [getAccessToken]);
+
   const disconnect = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_EXPIRY_KEY);
@@ -130,5 +147,5 @@ export function useGoogleDrive() {
     [getAccessToken],
   );
 
-  return { ...state, connect, disconnect, upload };
+  return { ...state, connect, disconnect, upload, verifyConnection };
 }

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { FormConfig } from '../config/formTypes';
 import { validateSection } from '../utils/validation';
+import { parseBirthNumber } from '../utils/parseBirthNumber';
 
 export interface FormState {
   formConfig: FormConfig | null;
@@ -40,6 +41,26 @@ export function useFormState() {
     setErrors((prev) => {
       const next = { ...prev };
       delete next[fieldId];
+      return next;
+    });
+  }, []);
+
+  const handleFieldBlur = useCallback((fieldId: string, value: unknown) => {
+    if (fieldId !== 'birthNumber' || typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    const result = parseBirthNumber(trimmed);
+    if (!result.valid) {
+      setErrors((prev) => ({ ...prev, birthNumber: 'invalidBirthNumber' }));
+      return;
+    }
+
+    setFormData((prev) => {
+      const next = { ...prev };
+      const isEmpty = (v: unknown) => v === undefined || v === null || v === '';
+      if (isEmpty(next.birthDate) && result.birthDate) next.birthDate = result.birthDate;
+      if (isEmpty(next.gender) && result.gender) next.gender = result.gender;
       return next;
     });
   }, []);
@@ -97,6 +118,7 @@ export function useFormState() {
     isComplete,
     selectForm,
     updateField,
+    handleFieldBlur,
     nextSection,
     prevSection,
     goToReview,
